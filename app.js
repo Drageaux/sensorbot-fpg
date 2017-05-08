@@ -7,13 +7,26 @@ var express = require('express'),
 var app = express();
 
 
+// Timeout Variables
+// Discovering is limited to timeoutVar
+var timeoutVar = 60000;
+var timeoutID;
+var timeoutCleared = true;
+// Duplicates allowed -> Reconnect possible
+SensorTag.SCAN_DUPLICATES = true;
+
+// For each discovered Tag
 function onDiscover(sensorTag) {
-    console.log('discovered: ' + sensorTag);
+    console.log('Discovered: ' + sensorTag);
+    stopScan();
 
     async.series([
         function (callback) {
             console.log('connectAndSetUp');
-            sensorTag.connectAndSetUp(callback);
+            sensorTag.connectAndSetUp(function () {
+                startScan();
+                callback();
+            });
         },
         function (callback) {
             console.log('enableLuxometer');
@@ -37,14 +50,26 @@ function onDiscover(sensorTag) {
     ]);
 }
 
-
-function handleError(err) {
-    console.log(err);
+function startScan() {
+    console.log('Start discovering');
+    timeoutCleared = false;
+    SensorTag.discoverAll(onDiscover);
+    timeoutID = setTimeout(function () {
+        stopScan();
+    }, timeoutVar);
+    SensorTag.discoverAll(onDiscover);
 }
 
-SensorTag.discoverAll(onDiscover);
+function stopScan() {
+    SensorTag.stopDiscoverAll(onDiscover);
+    timeoutCleared = true;
+    console.log('Stop discovering');
+    clearTimeout(timeoutID);
+}
 
+startScan();
 
+// Web API
 app.get('/', function (req, res) {
     res.send('Hello World!');
 });
