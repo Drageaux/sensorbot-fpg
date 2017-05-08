@@ -6,68 +6,77 @@ var express = require('express'),
 
 var app = express();
 
+var sensorList = [];
+var roomOne = {
+    id: '247189e06f86',
+    name: 'One',
+    available: false
+};
+var roomTwo = {
+    id: '247189e87a05',
+    name: 'Two',
+    available: false
+};
 
-// Timeout Variables
-// Discovering is limited to timeoutVar
-var timeoutVar = 60000;
-var timeoutID;
-var timeoutCleared = true;
 // Duplicates allowed -> Reconnect possible
 SensorTag.SCAN_DUPLICATES = true;
 
-// For each discovered Tag
-function onDiscover(sensorTag) {
-    console.log('Discovered: ' + sensorTag);
-    stopScan();
+function displayStatus(room, lux) {
+    if (lux >= 10) room.available = false;
+    else room.available = true;
 
-    async.series([
-        function (callback) {
-            console.log('connectAndSetUp');
-            sensorTag.connectAndSetUp(function () {
-                startScan();
-                callback();
-            });
-        },
-        function (callback) {
-            console.log('enableLuxometer');
-            sensorTag.enableLuxometer(callback);
-        },
-        function (callback) {
-            setTimeout(callback, 2000);
-        },
-        function (callback) {
-            sensorTag.on('luxometerChange', function (lux) {
-                console.log('\tlux = %d', lux.toFixed(1));
-            });
+    var message = '\tRoom ' + room.name + ' is ';
+    message += room.available ? 'available. ' : 'NOT available. ';
+    message += 'Lux ' + lux.toFixed(1);
+    console.log(message)
+}
 
-            console.log('setLuxometer');
-            sensorTag.setLuxometerPeriod(2000, function (error) {
-                console.log('notifyLuxometer');
-                sensorTag.notifyLuxometer();
-            });
+// discover using the list of device IDs
+SensorTag.discoverAll(function (sensorTag) {
+    console.log('discovered ' + sensorTag);
+    sensorList.push(sensorTag);
+});
+
+// wait 5 seconds before set up
+// because setting up while discovering might not work
+setTimeout(function () {
+    async.eachSeries(sensorList, function (sensorTag, callback) {
+        async.series([
+            function (cb) {
+                console.log('connectAndSetUp');
+                sensorTag.connectAndSetUp(cb);
+            },
+            function (cb) {
+                console.log('enableLuxometer');
+                sensorTag.enableLuxometer(cb);
+            },
+            function (cb) {
+                setTimeout(cb, 2000);
+            },
+            function (cb) {
+                sensorTag.on('luxometerChange', function (lux) {
+                    if (sensorTag.id == roomOne.id) {
+                        displayStatus(roomOne, lux);
+                    } else if (sensorTag.id == roomTwo.id) {
+                        displayStatus(roomTwo, lux)
+                    }
+                });
+
+                console.log('setLuxometer');
+                sensorTag.setLuxometerPeriod(2000, function (error) {
+                    console.log('notifyLuxometer');
+                    sensorTag.notifyLuxometer();
+                });
+                cb();
+            }
+        ], function (err, results) {
             callback();
-        }
-    ]);
-}
+        });
+    }, function (err, results) {
+        console.log("Finished")
+    });
+}, 3000);
 
-function startScan() {
-    console.log('Start discovering');
-    timeoutCleared = false;
-    SensorTag.discoverAll(onDiscover);
-    timeoutID = setTimeout(function () {
-        stopScan();
-    }, timeoutVar);
-    SensorTag.discoverAll(onDiscover);
-}
-
-function stopScan() {
-    SensorTag.stopDiscoverAll(onDiscover);
-    timeoutCleared = true;
-    console.log('Stop discovering');
-    clearTimeout(timeoutID);
-}
-
-startScan();
 
 // Web API
 app.get('/', function (req, res) {
