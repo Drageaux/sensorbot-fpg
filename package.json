@@ -1,0 +1,13 @@
+{
+  "name": "sensortag-fpg",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.17.1",
+    "express": "^4.15.2",
+    "sensortag": "^1.3.0"
+  }
+}
